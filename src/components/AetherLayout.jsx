@@ -1,8 +1,8 @@
 /**
  * Aether App Layout — Bottom tab navigation for all main screens
  */
-import React from 'react';
-import { Outlet, NavLink, useNavigate } from 'react-router-dom';
+import React, { useRef } from 'react';
+import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { LayoutDashboard, Target, Database, Mic, Settings } from 'lucide-react';
 import useAetherStore from '@/lib/aetherStore';
 
@@ -17,11 +17,40 @@ const NAV_ITEMS = [
 export default function AetherLayout() {
   const { pendingApprovals } = useAetherStore();
   const navigate = useNavigate();
+  const location = useLocation();
+  // Track scroll position per tab
+  const scrollPositions = useRef({});
+  const contentRef = useRef(null);
+
+  const handleTabClick = (e, item) => {
+    const currentPath = location.pathname;
+    if (currentPath === item.to) {
+      // Already on this tab — scroll to top
+      e.preventDefault();
+      if (contentRef.current) {
+        contentRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    } else {
+      // Save scroll position of current tab before leaving
+      if (contentRef.current) {
+        scrollPositions.current[currentPath] = contentRef.current.scrollTop;
+      }
+    }
+  };
+
+  // Restore scroll position when tab becomes active
+  const handleTabNavigated = (to) => {
+    requestAnimationFrame(() => {
+      if (contentRef.current) {
+        contentRef.current.scrollTop = scrollPositions.current[to] || 0;
+      }
+    });
+  };
 
   return (
     <div className="flex flex-col h-screen" style={{ background: 'var(--aether-bg)' }}>
       {/* Main content */}
-      <div className="flex-1 overflow-hidden">
+      <div ref={contentRef} className="flex-1 overflow-y-auto overflow-x-hidden">
         <Outlet />
       </div>
 
@@ -50,13 +79,8 @@ export default function AetherLayout() {
                 })}
                 aria-label={item.label}
                 onClick={(e) => {
-                  // If already on this tab, reset to root route
-                  const currentPath = window.location.pathname;
-                  if (currentPath === item.to || (item.exact && currentPath === item.to)) {
-                    e.preventDefault();
-                    navigate(item.to, { replace: true });
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                  }
+                  handleTabClick(e, item);
+                  handleTabNavigated(item.to);
                 }}
               >
                 {({ isActive }) => (

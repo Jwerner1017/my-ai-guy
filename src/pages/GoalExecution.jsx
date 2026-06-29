@@ -3,13 +3,23 @@
  * Animated graph, live nodes, pause/interrupt, approval modal
  */
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Pause, Play, Square, AlertCircle, CheckCircle, Clock, Loader2 } from 'lucide-react';
+import { Pause, Play, Square, AlertCircle, CheckCircle, Clock, Loader2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import ReasoningTrace from '@/components/aether/ReasoningTrace';
 import ApprovalModal from '@/components/aether/ApprovalModal';
 import useAetherStore, { NODE_STATUS, CONNECTION_STATUS } from '@/lib/aetherStore';
 import wsClient from '@/lib/wsClient';
 import { formatDistanceToNow } from 'date-fns';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 // ── Goal Status Badge ─────────────────────────────────────────────────────────
 function GoalStatusBadge({ isExecuting, executionPaused, hasNodes }) {
@@ -43,8 +53,9 @@ function ExecutionControls({ isExecuting, isPaused, onPause, onResume, onInterru
 
   return (
     <div
-      className="fixed bottom-20 left-4 right-4 z-30 flex gap-3 p-4 rounded-2xl max-w-xl mx-auto"
+      className="fixed left-4 right-4 z-30 flex gap-3 p-4 rounded-2xl max-w-xl mx-auto"
       style={{
+        bottom: 'calc(env(safe-area-inset-bottom, 0px) + 80px)',
         background: 'var(--aether-surface)',
         border: '1px solid var(--aether-border)',
         boxShadow: '0 -4px 32px rgba(0,0,0,0.4)',
@@ -150,6 +161,7 @@ export default function GoalExecution() {
 
   const [activeApproval, setActiveApproval] = useState(null);
   const [showLog, setShowLog] = useState(false);
+  const [showInterruptDialog, setShowInterruptDialog] = useState(false);
 
   const isConnected = connectionStatus === CONNECTION_STATUS.CONNECTED;
 
@@ -163,11 +175,7 @@ export default function GoalExecution() {
 
   const handlePause = () => wsClient.pauseGoal();
   const handleResume = () => wsClient.resumeGoal();
-  const handleInterrupt = () => {
-    if (window.confirm('Interrupt execution? Aether will stop immediately.')) {
-      wsClient.interruptGoal();
-    }
-  };
+  const handleInterrupt = () => setShowInterruptDialog(true);
 
   const completedNodes = executionNodes.filter(n => n.status === NODE_STATUS.COMPLETE).length;
   const totalNodes = executionNodes.length;
@@ -182,9 +190,6 @@ export default function GoalExecution() {
         className="flex items-center gap-3 px-4 py-3 border-b"
         style={{ borderColor: 'var(--aether-border)', background: 'var(--aether-surface)' }}
       >
-        <Link to="/" className="text-gray-500 hover:text-gray-300 transition-colors" aria-label="Back">
-          <ArrowLeft size={20} />
-        </Link>
         <div className="flex-1 min-w-0">
           <h2 className="text-sm font-semibold text-gray-200 truncate">
             {activeGoal?.text || 'Goal Execution'}
@@ -288,6 +293,31 @@ export default function GoalExecution() {
           onClose={() => setActiveApproval(null)}
         />
       )}
+
+      {/* Interrupt confirmation dialog */}
+      <AlertDialog open={showInterruptDialog} onOpenChange={setShowInterruptDialog}>
+        <AlertDialogContent style={{ background: 'var(--aether-surface)', border: '1px solid var(--aether-border)' }}>
+          <AlertDialogHeader>
+            <AlertDialogTitle style={{ color: 'var(--aether-text)' }}>Interrupt Execution?</AlertDialogTitle>
+            <AlertDialogDescription style={{ color: 'var(--aether-text-muted)' }}>
+              Aether will stop immediately. Any in-progress work will be lost.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              style={{ background: 'var(--aether-surface-2)', color: 'var(--aether-text)', border: '1px solid var(--aether-border)' }}
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => { wsClient.interruptGoal(); setShowInterruptDialog(false); }}
+              style={{ background: 'rgba(255,71,87,0.15)', color: '#FF4757', border: '1px solid rgba(255,71,87,0.3)' }}
+            >
+              Interrupt
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

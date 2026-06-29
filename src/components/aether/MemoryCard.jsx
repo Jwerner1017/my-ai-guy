@@ -5,6 +5,16 @@ import React, { useState } from 'react';
 import { Brain, BookOpen, Lightbulb, Clock, Trash2, Edit3, Check, X } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import wsClient from '@/lib/wsClient';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 const TYPE_CONFIG = {
   episodic: {
@@ -88,17 +98,17 @@ function ImportanceBar({ value, color, editable, onEdit }) {
 export default function MemoryCard({ memory, expanded: defaultExpanded = false, onDelete }) {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const [deleted, setDeleted] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const typeConfig = TYPE_CONFIG[memory.type] || TYPE_CONFIG.general;
   const TypeIcon = typeConfig.icon;
 
   if (deleted) return null;
 
-  const handleDelete = () => {
-    if (window.confirm('Delete this memory? This cannot be undone.')) {
-      setDeleted(true);
-      wsClient.deleteMemory(memory.id);
-      onDelete?.(memory.id);
-    }
+  const handleDelete = () => setShowDeleteDialog(true);
+  const confirmDelete = () => {
+    setDeleted(true);
+    wsClient.deleteMemory(memory.id);
+    onDelete?.(memory.id);
   };
 
   const handleImportanceEdit = (newVal) => {
@@ -180,6 +190,34 @@ export default function MemoryCard({ memory, expanded: defaultExpanded = false, 
           onEdit={handleImportanceEdit}
         />
       </div>
+
+      {/* Delete confirmation dialog */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent
+          style={{ background: 'var(--aether-surface)', border: '1px solid var(--aether-border)' }}
+          onClick={e => e.stopPropagation()}
+        >
+          <AlertDialogHeader>
+            <AlertDialogTitle style={{ color: 'var(--aether-text)' }}>Delete Memory?</AlertDialogTitle>
+            <AlertDialogDescription style={{ color: 'var(--aether-text-muted)' }}>
+              This memory will be permanently removed. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              style={{ background: 'var(--aether-surface-2)', color: 'var(--aether-text)', border: '1px solid var(--aether-border)' }}
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              style={{ background: 'rgba(255,71,87,0.15)', color: '#FF4757', border: '1px solid rgba(255,71,87,0.3)' }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

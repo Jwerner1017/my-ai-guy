@@ -3,8 +3,7 @@
  * Central orb, live transcript, waveform, barge-in support
  */
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Settings, Volume2, Volume1, Mic, MicOff, X } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Settings, Volume2, Volume1, Mic, MicOff, X } from 'lucide-react';
 import AetherOrb from '@/components/aether/AetherOrb';
 import useAetherStore, { VOICE_STATE } from '@/lib/aetherStore';
 import wsClient from '@/lib/wsClient';
@@ -165,14 +164,7 @@ export default function VoiceMode() {
 
       {/* Top bar */}
       <div className="flex items-center justify-between px-4 pt-4 pb-2 z-10">
-        <Link
-          to="/"
-          className="flex items-center gap-2 text-sm font-medium"
-          style={{ color: 'var(--aether-text-muted)' }}
-          aria-label="Back to Dashboard"
-        >
-          <ArrowLeft size={18} />
-        </Link>
+        <div className="w-8" />
 
         <div className="flex items-center gap-2">
           <span className="text-xs font-semibold text-gray-500 uppercase tracking-widest">
