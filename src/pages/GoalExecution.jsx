@@ -6,6 +6,7 @@ import React, { useState, useEffect } from 'react';
 import { Pause, Play, Square, AlertCircle, CheckCircle, Clock, Loader2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import ReasoningTrace from '@/components/aether/ReasoningTrace';
+import ThinkingNodeGraph from '@/components/aether/ThinkingNodeGraph';
 import ApprovalModal from '@/components/aether/ApprovalModal';
 import useAetherStore, { NODE_STATUS, CONNECTION_STATUS } from '@/lib/aetherStore';
 import wsClient from '@/lib/wsClient';
@@ -244,6 +245,9 @@ export default function GoalExecution() {
                 </span>
               </button>
             )}
+
+            {/* Animated thinking pipeline */}
+            <ThinkingNodeGraph nodes={executionNodes} isExecuting={isExecuting} />
 
             {/* Reasoning trace */}
             <div
