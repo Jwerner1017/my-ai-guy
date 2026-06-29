@@ -6,43 +6,116 @@ import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import ScrollToTop from './components/ScrollToTop';
-// Add page imports here
+import { useEffect } from 'react';
+
+// Aether pages
+import Onboarding from '@/pages/Onboarding';
+import Dashboard from '@/pages/Dashboard';
+import GoalExecution from '@/pages/GoalExecution';
+import MemoryBrowser from '@/pages/MemoryBrowser';
+import VoiceMode from '@/pages/VoiceMode';
+import ToolsApprovals from '@/pages/ToolsApprovals';
+import Settings from '@/pages/Settings';
+import AetherLayout from '@/components/AetherLayout';
+
+// Aether store & WS
+import useAetherStore, { CONNECTION_STATUS } from '@/lib/aetherStore';
+import wsClient from '@/lib/wsClient';
+
+// ── Auto-connect on mount ─────────────────────────────────────────────────────
+function AetherApp() {
+  const { onboardingComplete, settings, connectionStatus, loadMockData } = useAetherStore();
+
+  useEffect(() => {
+    // Auto-connect if settings exist and auto-connect is enabled
+    if (
+      onboardingComplete &&
+      settings.autoConnect &&
+      settings.savedHost &&
+      connectionStatus === CONNECTION_STATUS.IDLE
+    ) {
+      wsClient.connect(settings.savedHost, settings.savedPort || '8765');
+    }
+
+    // Load demo data for preview if not connected after 3s
+    const timer = setTimeout(() => {
+      const status = useAetherStore.getState().connectionStatus;
+      if (status === CONNECTION_STATUS.IDLE || status === CONNECTION_STATUS.DISCONNECTED) {
+        if (useAetherStore.getState().onboardingComplete) {
+          loadMockData();
+        }
+      }
+    }, 3000);
+
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Show onboarding if not complete
+  if (!onboardingComplete) {
+    return (
+      <Routes>
+        <Route
+          path="*"
+          element={
+            <Onboarding
+              onComplete={() => {
+                useAetherStore.getState().completeOnboarding();
+                window.location.href = '/';
+              }}
+            />
+          }
+        />
+      </Routes>
+    );
+  }
+
+  return (
+    <Routes>
+      <Route element={<AetherLayout />}>
+        <Route path="/" element={<Dashboard />} />
+        <Route path="/goals" element={<GoalExecution />} />
+        <Route path="/memory" element={<MemoryBrowser />} />
+        <Route path="/voice" element={<VoiceMode />} />
+        <Route path="/tools" element={<ToolsApprovals />} />
+        <Route path="/settings" element={<Settings />} />
+      </Route>
+      <Route
+        path="/onboarding"
+        element={<Onboarding onComplete={() => window.location.href = '/'} />}
+      />
+      <Route path="*" element={<PageNotFound />} />
+    </Routes>
+  );
+}
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
 
-  // Show loading spinner while checking app public settings or auth
   if (isLoadingPublicSettings || isLoadingAuth) {
     return (
-      <div className="fixed inset-0 flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-800 rounded-full animate-spin"></div>
+      <div className="fixed inset-0 flex items-center justify-center" style={{ background: 'var(--aether-bg)' }}>
+        <div className="flex flex-col items-center gap-4">
+          <div
+            className="w-14 h-14 rounded-2xl flex items-center justify-center animate-breathe"
+            style={{ background: 'var(--aether-cyan-dim)', border: '1px solid rgba(0,212,255,0.3)' }}
+          >
+            <div className="w-6 h-6 border-2 rounded-full border-t-transparent animate-spin" style={{ borderColor: 'var(--aether-cyan)' }} />
+          </div>
+          <p className="text-sm" style={{ color: 'var(--aether-text-muted)' }}>Initializing Aether…</p>
+        </div>
       </div>
     );
   }
 
-  // Handle authentication errors
   if (authError) {
-    if (authError.type === 'user_not_registered') {
-      return <UserNotRegisteredError />;
-    } else if (authError.type === 'auth_required') {
-      // Redirect to login automatically
-      navigateToLogin();
-      return null;
-    }
+    if (authError.type === 'user_not_registered') return <UserNotRegisteredError />;
+    if (authError.type === 'auth_required') { navigateToLogin(); return null; }
   }
 
-  // Render the main app
-  return (
-    <Routes>
-      {/* Add your page Route elements here */}
-      <Route path="*" element={<PageNotFound />} />
-    </Routes>
-  );
+  return <AetherApp />;
 };
 
-
 function App() {
-
   return (
     <AuthProvider>
       <QueryClientProvider client={queryClientInstance}>
