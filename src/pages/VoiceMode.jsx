@@ -3,8 +3,10 @@
  * Central orb, live transcript, waveform, barge-in support
  */
 import React, { useState, useEffect, useRef } from 'react';
-import { Settings, Volume2, Volume1, Mic, MicOff, X } from 'lucide-react';
+import { Settings, Volume2, Volume1, Mic, MicOff, X, Zap } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import AetherOrb from '@/components/aether/AetherOrb';
+import VoiceShortcuts from '@/components/aether/VoiceShortcuts';
 import useAetherStore, { VOICE_STATE } from '@/lib/aetherStore';
 import wsClient from '@/lib/wsClient';
 import { formatDistanceToNow } from 'date-fns';
@@ -115,15 +117,57 @@ function VoiceSettingsSheet({ onClose }) {
 }
 
 // ── Main Voice Mode ───────────────────────────────────────────────────────────
+// Match spoken text against shortcuts (fuzzy: lowercased includes)
+function matchShortcut(text, shortcuts) {
+  if (!text || !shortcuts.length) return null;
+  const lower = text.toLowerCase();
+  return shortcuts.find(sc => lower.includes(sc.phrase.toLowerCase())) || null;
+}
+
 export default function VoiceMode() {
-  const { voiceState, voiceTranscript, isVoiceActive } = useAetherStore();
+  const { voiceState, voiceTranscript, isVoiceActive, voiceShortcuts, submitGoal } = useAetherStore();
+  const navigate = useNavigate();
   const [showSettings, setShowSettings] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(false);
+  const [matchedShortcutId, setMatchedShortcutId] = useState(null);
   const transcriptRef = useRef(null);
 
   // Auto-scroll transcript
   useEffect(() => {
     if (transcriptRef.current) {
       transcriptRef.current.scrollTop = transcriptRef.current.scrollHeight;
+    }
+  }, [voiceTranscript]);
+
+  // Shortcut matching — check every new user utterance
+  useEffect(() => {
+    const lastEntry = voiceTranscript[voiceTranscript.length - 1];
+    if (!lastEntry || lastEntry.role !== 'user') return;
+
+    const hit = matchShortcut(lastEntry.text, voiceShortcuts);
+    if (!hit) return;
+
+    setMatchedShortcutId(hit.id);
+    setTimeout(() => setMatchedShortcutId(null), 2500);
+
+    // Fire the action
+    switch (hit.actionType) {
+      case 'goal':
+        if (hit.payload) {
+          submitGoal(hit.payload);
+          wsClient.sendGoal?.(hit.payload);
+          navigate('/goals');
+        }
+        break;
+      case 'reflect':
+        wsClient.triggerReflection?.();
+        break;
+      case 'memory':
+        navigate('/memory');
+        break;
+      case 'interrupt':
+        wsClient.interruptGoal?.();
+        break;
     }
   }, [voiceTranscript]);
 
@@ -164,7 +208,17 @@ export default function VoiceMode() {
 
       {/* Top bar */}
       <div className="flex items-center justify-between px-4 pt-4 pb-2 z-10">
-        <div className="w-8" />
+        <button
+          onClick={() => setShowShortcuts(true)}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl transition-colors"
+          style={{ background: 'var(--aether-surface)', border: '1px solid var(--aether-border)' }}
+          aria-label="Voice shortcuts"
+        >
+          <Zap size={13} style={{ color: 'var(--aether-cyan)' }} />
+          <span className="text-xs font-semibold" style={{ color: 'var(--aether-text-muted)' }}>
+            {voiceShortcuts.length > 0 ? `${voiceShortcuts.length} shortcuts` : 'Shortcuts'}
+          </span>
+        </button>
 
         <div className="flex items-center gap-2">
           <span className="text-xs font-semibold text-gray-500 uppercase tracking-widest">
@@ -261,6 +315,14 @@ export default function VoiceMode() {
 
       {/* Settings sheet */}
       {showSettings && <VoiceSettingsSheet onClose={() => setShowSettings(false)} />}
+
+      {/* Shortcuts sheet */}
+      {showShortcuts && (
+        <VoiceShortcuts
+          matchedPhraseId={matchedShortcutId}
+          onClose={() => setShowShortcuts(false)}
+        />
+      )}
     </div>
   );
 }

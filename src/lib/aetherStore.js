@@ -99,6 +99,9 @@ const useAetherStore = create(
       // ── Self-Improvement Log ────────────────────────────────────────────────
       improvementLog: [],
 
+      // ── Voice Shortcuts ─────────────────────────────────────────────────────
+      voiceShortcuts: [], // { id, phrase, actionType, payload }
+
       // ── Onboarding ─────────────────────────────────────────────────────────
       onboardingComplete: false,
 
@@ -268,6 +271,19 @@ const useAetherStore = create(
         }, ...state.improvementLog],
       })),
 
+      // ── Voice Shortcuts ─────────────────────────────────────────────────────
+      addVoiceShortcut: (shortcut) => set((state) => ({
+        voiceShortcuts: [...state.voiceShortcuts, { ...shortcut, id: `sc_${Date.now()}` }],
+      })),
+
+      updateVoiceShortcut: (id, patch) => set((state) => ({
+        voiceShortcuts: state.voiceShortcuts.map(s => s.id === id ? { ...s, ...patch } : s),
+      })),
+
+      deleteVoiceShortcut: (id) => set((state) => ({
+        voiceShortcuts: state.voiceShortcuts.filter(s => s.id !== id),
+      })),
+
       // ── Onboarding ──────────────────────────────────────────────────────────
       completeOnboarding: () => set({ onboardingComplete: true }),
 
@@ -308,6 +324,7 @@ const useAetherStore = create(
       // Only persist settings + onboarding state + history (not runtime WS state)
       partialize: (state) => ({
         settings: state.settings,
+        voiceShortcuts: state.voiceShortcuts,
         onboardingComplete: state.onboardingComplete,
         recentGoals: state.recentGoals,
         approvalHistory: state.approvalHistory,
