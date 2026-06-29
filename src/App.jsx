@@ -1,7 +1,8 @@
 import { Toaster } from "@/components/ui/toaster"
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
-import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Routes, useLocation } from 'react-router-dom';
+import { AnimatePresence, motion } from 'framer-motion';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
@@ -50,6 +51,8 @@ function AetherApp() {
     return () => clearTimeout(timer);
   }, []);
 
+  const location = useLocation();
+
   // Show onboarding if not complete
   if (!onboardingComplete) {
     return (
@@ -70,21 +73,32 @@ function AetherApp() {
   }
 
   return (
-    <Routes>
-      <Route element={<AetherLayout />}>
-        <Route path="/" element={<Dashboard />} />
-        <Route path="/goals" element={<GoalExecution />} />
-        <Route path="/memory" element={<MemoryBrowser />} />
-        <Route path="/voice" element={<VoiceMode />} />
-        <Route path="/tools" element={<ToolsApprovals />} />
-        <Route path="/settings" element={<Settings />} />
-      </Route>
-      <Route
-        path="/onboarding"
-        element={<Onboarding onComplete={() => window.location.href = '/'} />}
-      />
-      <Route path="*" element={<PageNotFound />} />
-    </Routes>
+    <AnimatePresence mode="wait" initial={false}>
+      <motion.div
+        key={location.pathname}
+        initial={{ x: 24, opacity: 0 }}
+        animate={{ x: 0, opacity: 1 }}
+        exit={{ x: -24, opacity: 0 }}
+        transition={{ duration: 0.22, ease: [0.32, 0.72, 0, 1] }}
+        style={{ position: 'absolute', inset: 0 }}
+      >
+        <Routes location={location}>
+          <Route element={<AetherLayout />}>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/goals" element={<GoalExecution />} />
+            <Route path="/memory" element={<MemoryBrowser />} />
+            <Route path="/voice" element={<VoiceMode />} />
+            <Route path="/tools" element={<ToolsApprovals />} />
+            <Route path="/settings" element={<Settings />} />
+          </Route>
+          <Route
+            path="/onboarding"
+            element={<Onboarding onComplete={() => window.location.href = '/'} />}
+          />
+          <Route path="*" element={<PageNotFound />} />
+        </Routes>
+      </motion.div>
+    </AnimatePresence>
   );
 }
 

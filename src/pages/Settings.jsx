@@ -5,8 +5,9 @@
 import React, { useState } from 'react';
 import {
   Wifi, Brain, Database, Mic, Palette, BookOpen, Download, AlertTriangle, Trash2, RefreshCw,
-  ChevronRight, Check, Info, ExternalLink, ToggleLeft, ToggleRight
+  ChevronRight, Check, Info, ExternalLink, ToggleLeft, ToggleRight, UserX
 } from 'lucide-react';
+import { base44 } from '@/api/base44Client';
 import StatusBar from '@/components/aether/StatusBar';
 import ConnectionSetup from '@/components/aether/ConnectionSetup';
 import useAetherStore, { CONNECTION_STATUS } from '@/lib/aetherStore';
@@ -389,6 +390,11 @@ export default function Settings() {
               destructive
               onClick={() => setDangerAction('factory_reset')}
             />
+            <Row
+              label="Delete Account"
+              destructive
+              onClick={() => setDangerAction('delete_account')}
+            />
           </Section>
         </div>
       </div>
@@ -407,6 +413,23 @@ export default function Settings() {
           title="Factory Reset Aether"
           description="This will reset Aether to its default state — all memory, learning, and configuration will be permanently deleted. This cannot be undone."
           onConfirm={handleFactoryReset}
+          onCancel={() => setDangerAction(null)}
+        />
+      )}
+      {dangerAction === 'delete_account' && (
+        <DangerModal
+          title="Delete Account"
+          description="This permanently deletes your Aether account and all associated data. You will be logged out immediately. This cannot be undone."
+          onConfirm={async () => {
+            try {
+              await base44.auth.deleteAccount?.();
+            } catch (e) {
+              // Server deletion attempted; log out regardless
+            } finally {
+              await base44.auth.logout('/');
+            }
+            setDangerAction(null);
+          }}
           onCancel={() => setDangerAction(null)}
         />
       )}

@@ -2,7 +2,7 @@
  * Aether App Layout — Bottom tab navigation for all main screens
  */
 import React from 'react';
-import { Outlet, NavLink } from 'react-router-dom';
+import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { LayoutDashboard, Target, Database, Mic, Settings } from 'lucide-react';
 import useAetherStore from '@/lib/aetherStore';
 
@@ -16,6 +16,7 @@ const NAV_ITEMS = [
 
 export default function AetherLayout() {
   const { pendingApprovals } = useAetherStore();
+  const navigate = useNavigate();
 
   return (
     <div className="flex flex-col h-screen" style={{ background: 'var(--aether-bg)' }}>
@@ -29,7 +30,7 @@ export default function AetherLayout() {
         className="flex-shrink-0 glass border-t"
         style={{
           borderColor: 'var(--aether-border)',
-          paddingBottom: 'env(safe-area-inset-bottom, 0)',
+          paddingBottom: 'env(safe-area-inset-bottom, 0px)',
         }}
         aria-label="Main navigation"
       >
@@ -48,6 +49,15 @@ export default function AetherLayout() {
                   color: isActive ? 'var(--aether-cyan)' : 'var(--aether-text-muted)',
                 })}
                 aria-label={item.label}
+                onClick={(e) => {
+                  // If already on this tab, reset to root route
+                  const currentPath = window.location.pathname;
+                  if (currentPath === item.to || (item.exact && currentPath === item.to)) {
+                    e.preventDefault();
+                    navigate(item.to, { replace: true });
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }
+                }}
               >
                 {({ isActive }) => (
                   <>

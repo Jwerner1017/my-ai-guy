@@ -5,6 +5,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Search, Sparkles, RefreshCw, X, Loader2 } from 'lucide-react';
 import StatusBar from '@/components/aether/StatusBar';
 import MemoryCard from '@/components/aether/MemoryCard';
+import PullToRefresh from '@/components/aether/PullToRefresh';
 import useAetherStore from '@/lib/aetherStore';
 import wsClient from '@/lib/wsClient';
 
@@ -183,7 +184,8 @@ export default function MemoryBrowser() {
         </div>
       </div>
 
-      {/* Scrollable list */}
+      {/* Scrollable list with pull-to-refresh */}
+      <PullToRefresh onRefresh={() => wsClient.fetchMemories({})}>
       <div className="flex-1 overflow-y-auto px-4 pb-24">
         <div className="space-y-3 max-w-2xl mx-auto">
 
@@ -220,6 +222,7 @@ export default function MemoryBrowser() {
           ))}
         </div>
       </div>
+      </PullToRefresh>
     </div>
   );
 }

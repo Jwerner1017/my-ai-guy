@@ -9,6 +9,7 @@ import StatusBar from '@/components/aether/StatusBar';
 import GoalInput from '@/components/aether/GoalInput';
 import ReasoningTrace from '@/components/aether/ReasoningTrace';
 import ApprovalModal from '@/components/aether/ApprovalModal';
+import PullToRefresh from '@/components/aether/PullToRefresh';
 import useAetherStore, { CONNECTION_STATUS } from '@/lib/aetherStore';
 import wsClient from '@/lib/wsClient';
 import { formatDistanceToNow } from 'date-fns';
@@ -205,8 +206,8 @@ export default function Dashboard() {
       {/* Status Bar */}
       <StatusBar />
 
-      {/* Scrollable content */}
-      <div className="flex-1 overflow-y-auto">
+      {/* Scrollable content with pull-to-refresh */}
+      <PullToRefresh onRefresh={() => wsClient.fetchStatus?.()}>
         <div className="px-4 pt-5 pb-24 space-y-5 max-w-2xl mx-auto">
 
           {/* Header */}
@@ -304,7 +305,7 @@ export default function Dashboard() {
           {/* Recent goals */}
           {isConnected && <RecentGoals />}
         </div>
-      </div>
+      </PullToRefresh>
 
       {/* Approval Modal */}
       {activeApproval && (

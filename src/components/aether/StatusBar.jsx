@@ -68,7 +68,7 @@ export default function StatusBar({ compact = false }) {
 
   return (
     <div className="flex items-center justify-between px-4 py-2 border-b"
-         style={{ borderColor: 'var(--aether-border)', background: 'var(--aether-surface)' }}>
+         style={{ borderColor: 'var(--aether-border)', background: 'var(--aether-surface)', paddingTop: 'max(env(safe-area-inset-top, 0px), 8px)' }}>
 
       {/* Left: Status + Activity */}
       <div className="flex items-center gap-3 min-w-0">

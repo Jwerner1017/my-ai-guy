@@ -83,6 +83,41 @@
     color: var(--aether-text);
     font-family: 'Inter', system-ui, sans-serif;
     overflow-x: hidden;
+    /* Mobile: prevent text selection on interactive elements & disable overscroll bounce */
+    user-select: none;
+    -webkit-user-select: none;
+    overscroll-behavior: none;
+  }
+
+  /* Re-enable text selection for content areas */
+  p, span, h1, h2, h3, h4, h5, h6, li, td, th, blockquote, pre, code {
+    user-select: text;
+    -webkit-user-select: text;
+  }
+
+  input, textarea {
+    user-select: text;
+    -webkit-user-select: text;
+  }
+
+  /* System dark mode support (default is already dark) */
+  @media (prefers-color-scheme: light) {
+    :root {
+      --aether-bg: #F0F2F5;
+      --aether-surface: #FFFFFF;
+      --aether-surface-2: #F5F7FA;
+      --aether-text: #0E0F12;
+      --aether-text-muted: #6B7280;
+      --aether-text-dim: #9CA3AF;
+      --aether-border: rgba(0, 0, 0, 0.08);
+      --aether-border-active: rgba(0, 130, 200, 0.4);
+      --aether-cyan: #0096CC;
+      --aether-cyan-dim: rgba(0, 150, 204, 0.1);
+      --aether-cyan-glow: rgba(0, 150, 204, 0.2);
+      --aether-violet: #5B2ECC;
+      --aether-violet-dim: rgba(91, 46, 204, 0.1);
+      --aether-purple: #7340CC;
+    }
   }
 
   /* Scrollbar styling */
