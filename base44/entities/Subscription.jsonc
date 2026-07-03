@@ -1,0 +1,37 @@
+{
+  "name": "Subscription",
+  "type": "object",
+  "properties": {
+    "user_email": {
+      "type": "string",
+      "description": "Authoritative app user email from auth session"
+    },
+    "buyer_email": {
+      "type": "string",
+      "description": "Email typed by buyer at Wix checkout (may differ)"
+    },
+    "checkout_id": {
+      "type": "string",
+      "description": "Wix checkoutSession.id"
+    },
+    "subscription_id": {
+      "type": "string",
+      "description": "Wix lineItems[].subscriptionInfo.id, set on order_approved"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "active",
+        "canceled",
+        "ended"
+      ],
+      "default": "pending"
+    }
+  },
+  "required": [
+    "user_email",
+    "checkout_id",
+    "status"
+  ]
+}
