@@ -1,0 +1,44 @@
+version: '3.9'
+
+services:
+  aether:
+    build: .
+    container_name: aether-sovereign
+    ports:
+      - "7860:7860"          # Gradio dashboard
+      - "8765:8765"          # Future WebSocket for mobile companion
+    volumes:
+      - ./data:/app/data
+      - ./user_files:/app/user_files
+      - ~/.ollama:/root/.ollama   # Share Ollama models if running locally
+    environment:
+      - OLLAMA_HOST=http://host.docker.internal:11434   # Connect to local Ollama
+      - AETHER_CONFIG_PATH=/app/config/config.yaml
+    depends_on:
+      - ollama
+    restart: unless-stopped
+    # Uncomment for GPU support (NVIDIA)
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: aether-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ~/.ollama:/root/.ollama
+    restart: unless-stopped
+    # For GPU:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
