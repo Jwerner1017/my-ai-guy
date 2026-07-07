@@ -17,6 +17,8 @@ import MemoryBrowser from '@/pages/MemoryBrowser';
 import VoiceMode from '@/pages/VoiceMode';
 import ToolsApprovals from '@/pages/ToolsApprovals';
 import Settings from '@/pages/Settings';
+import Landing from '@/pages/Landing';
+import ThankYou from '@/pages/ThankYou';
 import AetherLayout from '@/components/AetherLayout';
 
 // Aether store & WS
@@ -52,6 +54,16 @@ function AetherApp() {
   }, []);
 
   const location = useLocation();
+
+  // Public marketing + post-checkout pages bypass onboarding and auth gate.
+  if (location.pathname === '/landing' || location.pathname === '/thank-you') {
+    return (
+      <Routes location={location}>
+        <Route path="/landing" element={<Landing />} />
+        <Route path="/thank-you" element={<ThankYou />} />
+      </Routes>
+    );
+  }
 
   // Show onboarding if not complete
   if (!onboardingComplete) {
