@@ -2,16 +2,16 @@
 
 This is the web app for **Aether Companion**, a private AI assistant, live at **https://myaiguy.me**. It includes:
 
-- A public landing and pricing page (`/landing`) for two tiers: a **Self-Host** license ($49 one-time) and **Hosted Pro** ($19/month). After checkout, buyers go to `/thank-you`.
+- A public landing and pricing page (`/landing`): hosted **Free**, **Pro** ($12/month) and **Power** ($39/month) plans sold through Stripe by the hosted backend, and a **Self-Host** license ($49 one-time) sold through Wix Payments. After checkout, buyers go to `/thank-you`.
 - A signed-in dashboard: goals (`/goals`), memory browser (`/memory`), voice mode (`/voice`), tools and approvals (`/tools`), settings (`/settings`), and onboarding.
 
-The app is built and hosted on **Base44**. It's a React 18 + Vite 6 SPA (React Router 6, Tailwind 3, shadcn/ui) that uses the Base44 SDK for auth and data. It also has two Base44 backend functions (Deno) for Wix Payments checkout.
+The app is built and hosted on **Base44**. It's a React 18 + Vite 6 SPA (React Router 6, Tailwind 3, shadcn/ui) that uses the Base44 SDK for auth and data. It also has two Base44 backend functions (Deno) for the Self-Host Wix Payments checkout.
 
 > Base44 syncs this repo in both directions. Anything pushed here shows up in the Base44 Builder, and publishing from Base44 deploys myaiguy.me.
 
 ## Backend (Aether)
 
-The assistant itself lives in [`backend/`](backend/README.md): a Python service on Claude Opus 5.5 that the app talks to over WebSocket on port 8765. It runs tools (files, shell, web), keeps memory across sessions, and plans multi-step work. Start it with `aether-server` and connect the app to `127.0.0.1:8765`.
+The assistant itself lives in [`backend/`](backend/README.md): a Python service on Claude Opus 5.5 that the app talks to over WebSocket on port 8765. It runs tools (files, shell, web), keeps memory across sessions, and plans multi-step work. Start it with `aether-server` and connect the app to `127.0.0.1:8765`. `aether-hosted` runs the multi-user hosted service with sign-in, plan limits and Stripe billing; see the backend README.
 
 ## Layout
 
@@ -22,7 +22,7 @@ The assistant itself lives in [`backend/`](backend/README.md): a Python service 
 | `src/api/base44Client.js` | Base44 SDK client |
 | `base44/config.jsonc` | Base44 CLI project config (`serveCommand: npm run dev`) |
 | `base44/entities/` | Base44 data entities (`User`) |
-| `base44/functions/create-checkout/` | Creates a Wix Payments checkout for `self_host` / `hosted_pro` |
+| `base44/functions/create-checkout/` | Creates a Wix Payments checkout for the `self_host` license |
 | `base44/functions/wix-payments-webhook/` | Receives Wix Payments events and verifies the RS256 JWT signature (fails closed) |
 
 ## Environment variables
@@ -37,6 +37,7 @@ These are names only. Never commit values. `.env*` files are gitignored.
 | `VITE_BASE44_APP_BASE_URL` | yes (frontend-only dev) | Deployed Base44 app URL that the Vite plugin proxies `/api` to |
 | `VITE_BASE44_FUNCTIONS_VERSION` | no | Pins a backend-functions version (defaults to the current one) |
 | `BASE44_LEGACY_SDK_IMPORTS` | no | `true` enables legacy `@/entities` / `@/integrations` imports in `vite.config.js` |
+| `VITE_AETHER_HOSTED_URL` | no | `wss://` address of the hosted backend (`aether-hosted`). Unset, the hosted plans show "Coming soon" |
 
 **Backend functions (Base44 secrets)**: set these in the Base44 dashboard, not in the repo.
 

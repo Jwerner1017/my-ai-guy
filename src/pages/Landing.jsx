@@ -1,22 +1,36 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Shield, Server, Cloud, Zap, Brain, Lock, ArrowRight, Check } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Shield, Server, Cloud, Zap, Brain, Lock, ArrowRight, Check, Sparkles, ListChecks } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
+import { HOSTED_URL, startCheckout } from '@/lib/hosted';
 
-const TIER_SELF_HOST = { id: 'self_host', name: 'Self-Host', price: '$49', period: 'one-time', tag: 'Free forever after', highlight: false,
-  features: ['Full Python backend (LangGraph + Ollama)', 'Local memory via ChromaDB', 'Browser automation (Playwright)', 'Voice (Whisper + Piper)', 'All your data stays on your machine'] };
-const TIER_HOSTED_PRO = { id: 'hosted_pro', name: 'Hosted Pro', price: '$19', period: '/month', tag: 'Zero setup', highlight: true,
-  features: ['We host & maintain your Aether instance', 'No Python, Ollama, or GPU needed', 'Cloud-synced memory backup', 'Automatic updates & model upgrades', 'Connect from any device, anywhere'] };
+// Hosted limits must match PLANS in backend/aether/accounts.py; prices must match the Stripe prices.
+const TIERS = [
+  { id: 'free', name: 'Free', price: '$0', period: '', tag: 'No card needed', icon: Sparkles, hosted: true,
+    features: ['30 messages a month', 'Fast model (Claude Haiku 5.5)', 'Web search, memory and task planning', 'Use it from any browser'] },
+  { id: 'pro', name: 'Pro', price: '$12', period: '/month', tag: 'Cancel anytime', icon: Cloud, hosted: true, highlight: true,
+    features: ['300 messages a month', 'Picks Claude Haiku 5.5 or Sonnet 5.5 for each request', 'Web search and page reading', 'Memory and tasks on every device'] },
+  { id: 'power', name: 'Power', price: '$39', period: '/month', tag: 'For heavy use', icon: Zap, hosted: true,
+    features: ['1,000 messages a month', 'Adds Claude Opus 5.5 for hard, multi-step work', 'Larger usage allowance for long research', 'Everything in Pro'] },
+  { id: 'self_host', name: 'Self-Host', price: '$49', period: 'one-time', tag: 'Bring your own API key', icon: Server, hosted: false,
+    features: ['Runs on your computer with your own Anthropic API key (you pay Anthropic for usage)', 'File and shell tools, each action approved by you', 'Any Claude model, no message limits from us', 'Memory, tasks and history stay on your machine'] },
+];
 
 const features = [
-  { icon: Brain, title: 'Reasoning Agent', text: 'LangGraph planner → executor → reflector with real tool calling.' },
-  { icon: Lock, title: 'Sovereignly Private', text: 'Self-host runs fully offline. Your data never leaves your machine.' },
-  { icon: Zap, title: 'Voice + Barge-in', text: 'Local Whisper transcription and Piper TTS with live barge-in.' },
-  { icon: Server, title: 'Self-Improving', text: 'ChromaDB memory with recency + importance scoring that learns.' },
+  { icon: Brain, title: 'An agent, not just chat', text: 'Built on Claude. It plans multi-step work, searches the web, reads pages and reports back.' },
+  { icon: ListChecks, title: 'Remembers you', text: 'Keeps notes on you and your projects across sessions. Read or delete them any time.' },
+  { icon: Lock, title: 'Private by design', text: 'Self-Host keeps memory, tasks and files on your computer. Hosted accounts are kept separate.' },
+  { icon: Shield, title: 'You stay in control', text: 'On Self-Host, every file write and shell command waits for your approval.' },
 ];
 
 function PricingCard({ tier, onCheckout, loadingTier }) {
-  const Icon = tier.id === 'self_host' ? Server : Cloud;
+  const Icon = tier.icon;
+  const comingSoon = tier.hosted && !HOSTED_URL; // hosted service not deployed yet: don't sell it
+  const label = comingSoon ? 'Coming soon'
+    : loadingTier === tier.id ? 'Redirecting…'
+    : tier.id === 'free' ? 'Start free'
+    : tier.id === 'self_host' ? 'Buy Self-Host'
+    : `Get ${tier.name}`;
   return (
     <div
       className={`relative flex flex-col rounded-2xl p-6 transition-all duration-300 ${
@@ -24,7 +38,7 @@ function PricingCard({ tier, onCheckout, loadingTier }) {
       }`}
     >
       {tier.highlight && (
-        <span className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-xs font-semibold tag-cyan uppercase tracking-widest">
+        <span className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-xs font-semibold tag-cyan uppercase tracking-widest whitespace-nowrap">
           Most Popular
         </span>
       )}
@@ -52,10 +66,10 @@ function PricingCard({ tier, onCheckout, loadingTier }) {
       </ul>
       <button
         onClick={() => onCheckout(tier.id)}
-        disabled={loadingTier === tier.id}
-        className={`w-full py-3 rounded-xl font-semibold text-sm transition-all ${tier.highlight ? 'btn-cyan' : 'btn-surface'}`}
+        disabled={comingSoon || loadingTier === tier.id}
+        className={`w-full py-3 rounded-xl font-semibold text-sm transition-all disabled:opacity-50 ${tier.highlight ? 'btn-cyan' : 'btn-surface'}`}
       >
-        {loadingTier === tier.id ? 'Redirecting…' : tier.id === 'hosted_pro' ? `Start ${tier.name}` : `Buy ${tier.name}`}
+        {label}
       </button>
     </div>
   );
@@ -64,10 +78,21 @@ function PricingCard({ tier, onCheckout, loadingTier }) {
 export default function Landing() {
   const [loadingTier, setLoadingTier] = useState(null);
   const [error, setError] = useState(null);
+  const navigate = useNavigate();
 
   const handleCheckout = async (tier) => {
+    if (tier === 'free') return navigate('/');
     setError(null);
     setLoadingTier(tier);
+    if (tier !== 'self_host') {
+      try {
+        await startCheckout(tier); // redirects to Stripe Checkout, or to sign-in first
+      } catch (e) {
+        setError(e.message);
+      }
+      setLoadingTier(null);
+      return;
+    }
     try {
       const res = await base44.functions.invoke('create-checkout', { tier });
       if (res.data?.redirectUrl) {
@@ -89,15 +114,15 @@ export default function Landing() {
         <div className="absolute inset-0 pointer-events-none aurora-gradient opacity-30" />
         <div className="relative max-w-4xl mx-auto text-center">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full mb-6 tag-violet text-xs font-semibold uppercase tracking-widest">
-            <Shield size={12} /> Sovereign AI Agent
+            <Shield size={12} /> Personal AI Agent
           </div>
           <h1 className="text-4xl sm:text-6xl font-extrabold mb-5 leading-tight">
             Your private AI agent.{' '}
             <span className="gradient-text-cyan">Yours to own.</span>
           </h1>
           <p className="text-lg mx-auto max-w-2xl mb-8 leading-relaxed" style={{ color: 'var(--aether-text-muted)' }}>
-            Aether Companion is a local-first reasoning agent that remembers, learns, and acts —
-            with a real tool-calling brain and voice. Run it on your machine, or let us run it for you.
+            Aether Companion is a personal AI agent on Claude that remembers you, plans multi-step work
+            and gets it done. Use it hosted from any browser, or run it on your own computer.
           </p>
           <div className="flex flex-wrap items-center justify-center gap-3">
             <a href="#pricing" className="btn-cyan px-7 py-3 rounded-xl text-sm font-semibold inline-flex items-center gap-2">
@@ -129,11 +154,11 @@ export default function Landing() {
       </section>
 
       {/* Pricing */}
-      <section id="pricing" className="px-6 py-16 max-w-4xl mx-auto">
+      <section id="pricing" className="px-6 py-16 max-w-6xl mx-auto">
         <div className="text-center mb-10">
-          <h2 className="text-2xl sm:text-3xl font-bold mb-2" style={{ color: 'var(--aether-text)' }}>Choose your sovereignty</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold mb-2" style={{ color: 'var(--aether-text)' }}>Choose how you run it</h2>
           <p className="text-sm" style={{ color: 'var(--aether-text-muted)' }}>
-            Both tiers get the full Aether engine. Hosted Pro just removes the setup.
+            Start free. Upgrade when you need more, or run it yourself.
           </p>
         </div>
         {error && (
@@ -141,15 +166,19 @@ export default function Landing() {
             {error}
           </div>
         )}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch">
-          <PricingCard tier={TIER_SELF_HOST} onCheckout={handleCheckout} loadingTier={loadingTier} />
-          <PricingCard tier={TIER_HOSTED_PRO} onCheckout={handleCheckout} loadingTier={loadingTier} />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 items-stretch">
+          {TIERS.map(tier => <PricingCard key={tier.id} tier={tier} onCheckout={handleCheckout} loadingTier={loadingTier} />)}
         </div>
+        <p className="text-xs text-center mt-8 max-w-2xl mx-auto leading-relaxed" style={{ color: 'var(--aether-text-dim)' }}>
+          Hosted plans also include a monthly usage allowance. Long research tasks and larger models use it faster, and the
+          app shows how much is left. Messages and allowance reset on the 1st of each month. Hosted Aether can't reach your
+          files or run commands on your computer; that needs Self-Host.
+        </p>
       </section>
 
       {/* Footer */}
       <footer className="px-6 py-10 text-center border-t" style={{ borderColor: 'var(--aether-border)' }}>
-        <p className="text-xs" style={{ color: 'var(--aether-text-dim)' }}>Aether Companion · Local-first, by design</p>
+        <p className="text-xs" style={{ color: 'var(--aether-text-dim)' }}>Aether Companion · Built on Claude</p>
       </footer>
     </div>
   );

@@ -3,22 +3,12 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 const WIX_API_KEY = Deno.env.get("WIX_PAYMENTS_API_KEY");
 const WIX_SITE_ID = Deno.env.get("WIX_PAYMENTS_SITE_ID");
 
-// Product catalog — single source of truth for both tiers
+// Product catalog. Hosted plans (Pro, Power) are sold through Stripe by the hosted backend (backend/aether/hosted.py).
 const PRODUCTS = {
   self_host: {
     name: "Aether Companion — Self-Host License",
     price: "49.00",
     type: "one_time",
-  },
-  hosted_pro: {
-    name: "Aether Companion — Hosted Pro (Monthly)",
-    price: "19.00",
-    type: "subscription",
-    subscriptionInfo: {
-      subscriptionSettings: { frequency: "MONTH" },
-      title: "Hosted Pro — Monthly",
-      description: "We host your Aether backend instance. Cancel anytime.",
-    },
   },
 };
 
@@ -32,7 +22,7 @@ Deno.serve(async (req) => {
     const tier = body?.tier;
     const product = PRODUCTS[tier];
     if (!product) {
-      return Response.json({ error: "Invalid product tier. Use 'self_host' or 'hosted_pro'." }, { status: 400 });
+      return Response.json({ error: "Invalid product tier. Use 'self_host'." }, { status: 400 });
     }
 
     if (!WIX_API_KEY || !WIX_SITE_ID) {
@@ -53,9 +43,6 @@ Deno.serve(async (req) => {
       quantity: 1,
       price: product.price,
     };
-    if (product.type === "subscription") {
-      item.subscriptionInfo = product.subscriptionInfo;
-    }
 
     const response = await fetch(
       "https://www.wixapis.com/payments/platform/v1/checkout-sessions/construct",

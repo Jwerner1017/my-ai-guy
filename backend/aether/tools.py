@@ -1,5 +1,5 @@
 """Client-side tools Aether can call. File tools stay inside the working directory; every write and
-every shell command goes through `approve` first."""
+every shell command goes through `approve` first. Hosted mode (`computer=False`) gets only the task planner."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ MAX_CHARS = 100_000
 Approve = Callable[[str, str], bool]
 
 
-def build_tools(workdir: Path, store: Store, approve: Approve) -> list:
+def build_tools(workdir: Path, store: Store, approve: Approve, computer: bool = True) -> list:
     root = workdir.resolve()
 
     def resolve(path: str) -> Path:
@@ -110,4 +110,5 @@ def build_tools(workdir: Path, store: Store, approve: Approve) -> list:
             return f"No task #{task_id}, or nothing to change."
         return format_tasks(store.list_tasks())
 
-    return [list_directory, read_file, write_file, run_shell, tasks]
+    # The hosted service must never touch its own disk or shell on a user's behalf.
+    return [list_directory, read_file, write_file, run_shell, tasks] if computer else [tasks]

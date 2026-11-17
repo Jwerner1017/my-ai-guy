@@ -17,16 +17,27 @@ from .tools import Approve, build_tools
 
 DEFAULT_MODEL = "claude-opus-5-5"
 
-SYSTEM = """You are Aether, a personal AI assistant that runs on the user's own computer. You get things done rather than describe how they could be done.
+SYSTEM = """You are Aether, a personal AI assistant. You get things done rather than describe how they could be done.
 
 Working rules:
 - At the start of a session, view /memories to recall who the user is and what you were working on. Save durable facts about the user, their preferences and their decisions there. Never store secrets or passwords.
 - For any request that takes several steps, plan it with the `tasks` tool before acting and update the tasks as you finish them.
-- Use the file tools to read and write files. Use `run_shell` for everything else. Every shell command and file write is shown to the user for approval, so make each one count.
+{tool_rule}
 - Use web_search for anything that may have changed since your training, and web_fetch to read a page the user names.
 - Be concise and plain-spoken. Report what you did and what it depends on. When you are blocked, ask one clear question.
 
-Environment: {os}. Working directory: {workdir}. Today is {date}."""
+{where} Today is {{date}}."""  # {date} is filled in per run
+COMPUTER_RULE = "- Use the file tools to read and write files. Use `run_shell` for everything else. Every shell command and file write is shown to the user for approval, so make each one count."
+HOSTED_RULE = "- You run as a hosted service with no access to the user's files or computer. When a request needs them, say so and suggest the self-hosted version."
+
+# Haiku 5.5 takes the basic web tools and has no server-side refusal fallback (a fallback list 400s there).
+WEB_TOOLS = [{"type": "web_search_20260209", "name": "web_search"}, {"type": "web_fetch_20260209", "name": "web_fetch"}]
+BASIC_WEB_TOOLS = [{"type": "web_search_20250305", "name": "web_search"}, {"type": "web_fetch_20250910", "name": "web_fetch"}]
+BASIC_WEB_MODELS = {"claude-haiku-5-5"}
+EFFORT = {"claude-haiku-5-5": "medium", "claude-sonnet-5-5": "medium"}  # everything else runs at "high"
+
+# keep_going(model, usage) is called after each model call; returning False ends the turn early.
+KeepGoing = Callable[[str, object], bool]
 
 
 class Agent:
@@ -37,6 +48,7 @@ class Agent:
         approve: Approve,
         model: str = DEFAULT_MODEL,
         client: anthropic.Anthropic | None = None,
+        computer: bool = True,
     ):
         self.client = client or anthropic.Anthropic()
         self.model = model
@@ -44,11 +56,10 @@ class Agent:
         self.messages: list[dict] = self.store.load_messages()
         self.tools = [
             BetaLocalFilesystemMemoryTool(str(home)),  # files under <home>/memories
-            *build_tools(workdir, self.store, approve),
-            {"type": "web_search_20260209", "name": "web_search"},
-            {"type": "web_fetch_20260209", "name": "web_fetch"},
+            *build_tools(workdir, self.store, approve, computer=computer),
         ]
-        self.system = SYSTEM.format(os=platform.platform(), workdir=workdir.resolve(), date=dt.date.today().isoformat())
+        where = f"You run on the user's own computer ({platform.platform()}). Working directory: {workdir.resolve()}." if computer else ""
+        self.system = SYSTEM.format(tool_rule=COMPUTER_RULE if computer else HOSTED_RULE, where=where).strip()
 
     def new_conversation(self) -> None:
         """Forget the chat history. Memory files and tasks are kept."""
@@ -60,26 +71,29 @@ class Agent:
         user_text: str,
         on_text: Callable[[str], None],
         on_event: Callable[[str, dict], None] = lambda kind, payload: None,
+        keep_going: KeepGoing = lambda model, usage: True,
     ) -> str:
         """Send one user turn, run tools until Claude is done, and stream reply text to `on_text`.
 
         `on_event` gets ("tool_start", {id, name, input}) before each tool runs and
         ("tool_end", {id, name, result, is_error}) after. Returns the final stop reason
-        ("end_turn", "refusal", "max_tokens", ...).
+        ("end_turn", "refusal", "max_tokens", ...), or "budget" when `keep_going` stopped it.
         """
         self.messages.append({"role": "user", "content": user_text})
+        basic = self.model in BASIC_WEB_MODELS
+        # On a safety refusal the API re-runs the turn on a fallback model inside the same call.
+        fallback = {} if basic else {"betas": ["server-side-fallback-2026-07-01"], "fallbacks": "default"}
         runner = self.client.beta.messages.tool_runner(
             model=self.model,
             max_tokens=64000,
             stream=True,
             max_iterations=50,
-            system=[{"type": "text", "text": self.system, "cache_control": {"type": "ephemeral"}}],
+            # The date sits in the system prompt, so the cache turns over once a day.
+            system=[{"type": "text", "text": self.system.replace("{date}", dt.date.today().isoformat()), "cache_control": {"type": "ephemeral"}}],
             messages=self.messages,
-            tools=self.tools,
-            output_config={"effort": "high"},
-            # On a safety refusal the API re-runs the turn on a fallback model inside the same call.
-            betas=["server-side-fallback-2026-07-01"],
-            fallbacks="default",
+            tools=[*self.tools, *(BASIC_WEB_TOOLS if basic else WEB_TOOLS)],
+            output_config={"effort": EFFORT.get(self.model, "high")},
+            **fallback,
         )
         stop_reason = "end_turn"
         try:
@@ -106,6 +120,10 @@ class Agent:
                             "is_error": bool(result.get("is_error")),
                         })
                 stop_reason = message.stop_reason or stop_reason
+                # Usage is always reported; the turn only stops early if Claude still has tool work queued.
+                if not keep_going(message.model or self.model, message.usage) and tool_results:
+                    stop_reason = "budget"  # history ends on tool results, so the next turn is still valid
+                    break
         finally:
             # shortcut: history is never compacted, so a very long chat eventually hits the context limit;
             # add server-side compaction (beta compact-2026-01-12) when that happens. `/new` resets it today.

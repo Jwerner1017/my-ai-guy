@@ -50,6 +50,9 @@ const useAetherStore = create(
       tokenUsage: { input: 0, output: 0, total: 0 },
       memoryCount: 0,
 
+      // ── Hosted account (plan + usage, from the hosted service) ─────────────
+      account: null,
+
       // ── Active Goal & Execution ─────────────────────────────────────────────
       activeGoal: null,
       isExecuting: false,
@@ -283,6 +286,8 @@ const useAetherStore = create(
       deleteVoiceShortcut: (id) => set((state) => ({
         voiceShortcuts: state.voiceShortcuts.filter(s => s.id !== id),
       })),
+
+      setAccount: (account) => set({ account }),
 
       // ── Onboarding ──────────────────────────────────────────────────────────
       completeOnboarding: () => set({ onboardingComplete: true }),

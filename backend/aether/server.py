@@ -1,7 +1,8 @@
 """WebSocket backend for the Aether Companion app (the my-ai-guy frontend).
 
 Speaks the protocol in `src/lib/wsClient.js`: JSON envelopes `{type, payload, timestamp}` over
-`ws://<host>:8765`. Run with `aether-server` or `python -m aether.server`.
+`ws://<host>:8765`. Run with `aether-server` or `python -m aether.server`. aiohttp serves the socket so the
+hosted service (`aether.hosted`) can add HTTP routes (Stripe webhooks) on the same port.
 """
 
 from __future__ import annotations
@@ -17,8 +18,7 @@ from concurrent.futures import TimeoutError as FutureTimeout
 from pathlib import Path
 
 import anthropic
-from websockets.asyncio.server import Server, ServerConnection, serve
-from websockets.exceptions import ConnectionClosed
+from aiohttp import WSMsgType, web
 
 from . import __version__
 from .agent import DEFAULT_MODEL, Agent
@@ -40,10 +40,11 @@ class CompanionServer:
         workdir: Path,
         model: str = DEFAULT_MODEL,
         client: anthropic.Anthropic | None = None,
+        computer: bool = True,
     ):
-        self.agent = Agent(home=home, workdir=workdir, approve=self.approve, model=model, client=client)
+        self.agent = Agent(home=home, workdir=workdir, approve=self.approve, model=model, client=client, computer=computer)
         self.memory_root = home / "memories"
-        self.clients: set[ServerConnection] = set()
+        self.clients: set[web.WebSocketResponse] = set()
         self.pending: dict[str, Future[bool]] = {}
         self.goals: set[asyncio.Task] = set()
         self.goal_lock = asyncio.Lock()
@@ -55,8 +56,8 @@ class CompanionServer:
         text = envelope(kind, payload)
         for ws in list(self.clients):
             try:
-                await ws.send(text)
-            except ConnectionClosed:
+                await ws.send_str(text)
+            except ConnectionResetError:
                 self.clients.discard(ws)
 
     def emit(self, kind: str, payload: dict | None = None) -> None:
@@ -90,35 +91,41 @@ class CompanionServer:
 
     async def run_goal(self, goal_text: str) -> None:
         async with self.goal_lock:
-            await self.broadcast("goal_started", {"goal_text": goal_text})
-            await self.broadcast("status_update", {"activity": f"Working on: {goal_text[:80]}"})
-            reply: list[str] = []
+            await self.execute_goal(goal_text)
 
-            def on_text(token: str) -> None:
-                reply.append(token)
-                self.emit("stream_token", {"token": token})
+    async def execute_goal(self, goal_text: str, keep_going=lambda model, usage: True) -> None:
+        """Run one goal and stream it to the app. Callers hold `goal_lock`."""
+        await self.broadcast("goal_started", {"goal_text": goal_text})
+        await self.broadcast("status_update", {"activity": f"Working on: {goal_text[:80]}"})
+        reply: list[str] = []
 
-            def on_event(kind: str, payload: dict) -> None:
-                node_id = payload["id"]
-                if kind == "tool_start":
-                    node_type = NODE_TYPES.get(payload["name"], "executor")
-                    self.emit("node_start", {"node_id": node_id, "name": payload["name"], "type": node_type})
-                    self.emit("node_update", {"node_id": node_id, "content": json.dumps(payload["input"])[:500], "status": "thinking"})
-                elif payload["is_error"]:
-                    self.emit("node_error", {"node_id": node_id, "error": str(payload["result"])[:2000]})
-                else:
-                    self.emit("node_complete", {"node_id": node_id, "result": str(payload["result"])[:2000]})
+        def on_text(token: str) -> None:
+            reply.append(token)
+            self.emit("stream_token", {"token": token})
 
-            stop_reason = "end_turn"
-            try:
-                stop_reason = await asyncio.to_thread(self.agent.run, goal_text, on_text, on_event)
-            except anthropic.APIError as err:
-                reply.append(f"\nAether could not reach the Claude API: {err}")
-                await self.broadcast("node_error", {"node_id": "api", "error": str(err)})
-            if stop_reason == "refusal":
-                reply.append("\n[Aether declined this request for safety reasons]")
-            await self.broadcast("goal_complete", {"result": "".join(reply)})
-            await self.broadcast("status_update", {"activity": "Ready", "memory_count": len(self.memory_files())})
+        def on_event(kind: str, payload: dict) -> None:
+            node_id = payload["id"]
+            if kind == "tool_start":
+                node_type = NODE_TYPES.get(payload["name"], "executor")
+                self.emit("node_start", {"node_id": node_id, "name": payload["name"], "type": node_type})
+                self.emit("node_update", {"node_id": node_id, "content": json.dumps(payload["input"])[:500], "status": "thinking"})
+            elif payload["is_error"]:
+                self.emit("node_error", {"node_id": node_id, "error": str(payload["result"])[:2000]})
+            else:
+                self.emit("node_complete", {"node_id": node_id, "result": str(payload["result"])[:2000]})
+
+        stop_reason = "end_turn"
+        try:
+            stop_reason = await asyncio.to_thread(self.agent.run, goal_text, on_text, on_event, keep_going)
+        except anthropic.APIError as err:
+            reply.append(f"\nAether could not reach the Claude API: {err}")
+            await self.broadcast("node_error", {"node_id": "api", "error": str(err)})
+        if stop_reason == "refusal":
+            reply.append("\n[Aether declined this request for safety reasons]")
+        elif stop_reason == "budget":
+            reply.append("\n[Stopped here: this goal reached its usage limit. Ask me to continue if you have allowance left.]")
+        await self.broadcast("goal_complete", {"result": "".join(reply)})
+        await self.broadcast("status_update", {"activity": "Ready", "memory_count": len(self.memory_files())})
 
     # ---- memory -----------------------------------------------------------------------------
 
@@ -151,9 +158,9 @@ class CompanionServer:
 
     # ---- protocol ---------------------------------------------------------------------------
 
-    async def dispatch(self, ws: ServerConnection, kind: str, payload: dict) -> None:
+    async def dispatch(self, ws: web.WebSocketResponse, kind: str, payload: dict) -> None:
         if kind == "ping":
-            await ws.send(envelope("pong", {"name": "Aether", "version": __version__, "model": self.agent.model}))
+            await ws.send_str(envelope("pong", {"name": "Aether", "version": __version__, "model": self.agent.model}))
         elif kind == "goal_submit":
             goal_text = str(payload.get("goal_text", "")).strip()
             if goal_text:
@@ -166,13 +173,13 @@ class CompanionServer:
                 answer.set_result(payload.get("outcome") == "approved")
         elif kind == "memory_fetch":
             memories = self.memories()
-            await ws.send(envelope("memory_update", {"memories": memories, "count": len(memories)}))
+            await ws.send_str(envelope("memory_update", {"memories": memories, "count": len(memories)}))
         elif kind == "memory_delete":
             self.delete_memory(str(payload.get("memory_id", "")))
             memories = self.memories()
             await self.broadcast("memory_update", {"memories": memories, "count": len(memories)})
         elif kind == "models_list_request":
-            await ws.send(envelope("models_list", {"models": MODELS}))
+            await ws.send_str(envelope("models_list", {"models": MODELS}))
         elif kind == "model_select":
             if payload.get("model") in MODELS:
                 self.agent.model = payload["model"]
@@ -180,13 +187,15 @@ class CompanionServer:
         # shortcut: goal_pause/resume/interrupt, voice_* and memory_update_importance are accepted and ignored;
         # voice comes in phase 2, and interrupting needs cancellation support in Agent.run.
 
-    async def handle(self, ws: ServerConnection) -> None:
+    async def serve_socket(self, ws: web.WebSocketResponse) -> None:
         self.clients.add(ws)
         try:
-            await ws.send(envelope("status_update", {"activity": "Ready", "memory_count": len(self.memory_files())}))
-            async for raw in ws:
+            await ws.send_str(envelope("status_update", {"activity": "Ready", "memory_count": len(self.memory_files())}))
+            async for frame in ws:
+                if frame.type != WSMsgType.TEXT:
+                    continue
                 try:
-                    message = json.loads(raw)
+                    message = json.loads(frame.data)
                 except json.JSONDecodeError:
                     continue
                 if isinstance(message, dict):
@@ -194,14 +203,31 @@ class CompanionServer:
         finally:
             self.clients.discard(ws)
 
-    async def start(self, host: str, port: int) -> Server:
+    async def handle(self, request: web.Request) -> web.WebSocketResponse:
+        ws = web.WebSocketResponse(heartbeat=30)
+        await ws.prepare(request)
+        await self.serve_socket(ws)
+        return ws
+
+    def app(self) -> web.Application:
+        app = web.Application()
+        app.router.add_get("/", self.handle)
+        return app
+
+    async def start(self, host: str, port: int, app: web.Application | None = None) -> web.AppRunner:
+        """Start listening and return the runner; `runner.addresses[0][1]` is the bound port."""
         self.loop = asyncio.get_running_loop()
-        return await serve(self.handle, host, port)
+        runner = web.AppRunner(app or self.app())
+        await runner.setup()
+        await web.TCPSite(runner, host, port).start()
+        return runner
 
     async def serve_forever(self, host: str, port: int) -> None:
-        server = await self.start(host, port)
-        async with server:
-            await asyncio.Future()
+        runner = await self.start(host, port)
+        try:
+            await asyncio.Event().wait()
+        finally:
+            await runner.cleanup()
 
 
 def main() -> None:

@@ -2,16 +2,18 @@
  * Settings — Full configuration screen
  * Connection, LLM model, memory, voice, theme, danger zone
  */
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Wifi, Brain, Database, Mic, Palette, BookOpen, Download, AlertTriangle, Trash2, RefreshCw,
-  ChevronRight, Check, Info, ExternalLink, ToggleLeft, ToggleRight, UserX
+  ChevronRight, Check, Info, ExternalLink, ToggleLeft, ToggleRight, UserX, CreditCard
 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import StatusBar from '@/components/aether/StatusBar';
 import ConnectionSetup from '@/components/aether/ConnectionSetup';
 import useAetherStore, { CONNECTION_STATUS } from '@/lib/aetherStore';
 import wsClient from '@/lib/wsClient';
+import { openBillingPortal } from '@/lib/hosted';
 import { formatDistanceToNow } from 'date-fns';
 
 // ── Section wrapper ───────────────────────────────────────────────────────────
@@ -32,7 +34,7 @@ function Section({ title, icon: Icon, iconColor = 'var(--aether-cyan)', children
   );
 }
 
-function Row({ label, value, onClick, destructive, toggle, onToggle, rightEl }) {
+function Row({ label, value = null, onClick = null, destructive = false, toggle = undefined, onToggle = null, rightEl = null }) {
   const content = (
     <div
       className={`flex items-center justify-between px-4 py-3.5 border-b last:border-0 transition-colors ${onClick ? 'cursor-pointer hover:bg-white/5' : ''}`}
@@ -184,8 +186,23 @@ function ImprovementLog({ entries }) {
 export default function Settings() {
   const {
     settings, updateSettings, connectionStatus, connectedHost,
-    improvementLog, completeOnboarding,
+    improvementLog, completeOnboarding, account,
   } = useAetherStore();
+  const navigate = useNavigate();
+  const [billingError, setBillingError] = useState(null);
+
+  useEffect(() => {
+    if (account) wsClient.fetchAccount(); // fresh numbers, e.g. right after a plan change
+  }, []);
+
+  const handleBilling = async () => {
+    setBillingError(null);
+    try {
+      await openBillingPortal();
+    } catch (e) {
+      setBillingError(e.message);
+    }
+  };
 
   const [showConnection, setShowConnection] = useState(false);
   const [dangerAction, setDangerAction] = useState(null);
@@ -259,6 +276,45 @@ export default function Settings() {
               </div>
             )}
           </Section>
+
+          {/* ── Plan & usage (hosted service only) ── */}
+          {account && (
+            <Section title="Plan & Usage" icon={CreditCard} iconColor="#00E5A0">
+              <Row label="Plan" value={account.plan_title} />
+              <Row label="Messages this month" value={`${account.messages_used} of ${account.message_limit}`} />
+              <div className="px-4 py-3.5 border-b" style={{ borderColor: 'var(--aether-border)' }}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm text-gray-300">Usage allowance</span>
+                  <span className="text-sm text-gray-500 font-mono-aether">{Math.round(account.allowance_used * 100)}% used</span>
+                </div>
+                <div
+                  className="h-1.5 rounded-full overflow-hidden"
+                  style={{ background: 'rgba(255,255,255,0.06)' }}
+                  role="progressbar"
+                  aria-label="Usage allowance used"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={Math.round(account.allowance_used * 100)}
+                >
+                  <div
+                    className="h-full rounded-full"
+                    style={{
+                      width: `${Math.round(account.allowance_used * 100)}%`,
+                      background: account.allowance_used > 0.9 ? '#FF4757' : 'var(--aether-cyan)',
+                    }}
+                  />
+                </div>
+                <p className="text-xs text-gray-600 mt-2">
+                  Resets on the 1st of each month. Long research tasks and larger models use more of it.
+                </p>
+              </div>
+              {account.plan === 'free' && <Row label="See plans" onClick={() => navigate('/landing#pricing')} />}
+              {account.billing && (
+                <Row label="Manage billing" onClick={handleBilling} rightEl={<ExternalLink size={13} className="text-gray-600" />} />
+              )}
+              {billingError && <p className="px-4 py-3 text-xs text-red-400">{billingError}</p>}
+            </Section>
+          )}
 
           {/* ── LLM Model ── */}
           <Section title="Language Model" icon={Brain} iconColor="#9B5CFF">

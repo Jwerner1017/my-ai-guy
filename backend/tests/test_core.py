@@ -82,13 +82,18 @@ def test_tasks_tool_plans_and_updates(tmp_path, store):
         tasks.call({"action": "add"})
 
 
+# One model call: 1,000 fresh input tokens and 100 output tokens, no cache, no web search.
+USAGE = SimpleNamespace(input_tokens=1000, output_tokens=100, cache_creation_input_tokens=0, cache_read_input_tokens=0, server_tool_use=None)
+
+
+def fake_message(stop_reason, content):
+    return SimpleNamespace(stop_reason=stop_reason, content=content, model=None, usage=USAGE)
+
+
 class FakeStream:
     def __init__(self, text):
         self.text_stream = iter([text[:5], text[5:]])
-        self.message = SimpleNamespace(
-            stop_reason="end_turn",
-            content=[SimpleNamespace(type="text", to_dict=lambda: {"type": "text", "text": text})],
-        )
+        self.message = fake_message("end_turn", [SimpleNamespace(type="text", to_dict=lambda: {"type": "text", "text": text})])
 
     def get_final_message(self):
         return self.message
@@ -146,7 +151,7 @@ def test_agent_reports_tool_calls(tmp_path):
     class ToolStream(FakeStream):
         def __init__(self):
             super().__init__("")
-            self.message = SimpleNamespace(stop_reason="tool_use", content=[call])
+            self.message = fake_message("tool_use", [call])
 
     class ToolRunner(FakeRunner):
         answered = False
