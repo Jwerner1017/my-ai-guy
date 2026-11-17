@@ -5,6 +5,7 @@
  */
 
 import useAetherStore, { CONNECTION_STATUS, NODE_STATUS, VOICE_STATE } from './aetherStore';
+import { HOSTED_URL, authToken } from './hosted';
 
 const HEARTBEAT_INTERVAL = 15000; // 15s
 const RECONNECT_BASE_DELAY = 1000;
@@ -23,10 +24,13 @@ class AetherWSClient {
   }
 
   // ─── Connect ───────────────────────────────────────────────────────────────
+  // `host` is a LAN address (with `port`) or a full ws:// / wss:// URL such as the hosted service.
   connect(host, port = '8765') {
     this.isManualClose = false;
-    this.currentHost = `${host}:${port}`;
-    const url = `ws://${host}:${port}`;
+    const isUrl = /^wss?:\/\//.test(host);
+    this.currentHost = isUrl ? host : `${host}:${port}`;
+    this.currentArgs = [host, port];
+    const url = isUrl ? host : `ws://${host}:${port}`;
 
     const store = useAetherStore.getState();
     store.setConnectionStatus(CONNECTION_STATUS.CONNECTING);
@@ -89,6 +93,10 @@ class AetherWSClient {
     this.ws.onopen = () => {
       console.log('[AetherWS] Connected to', this.currentHost);
       store().setConnected(this.currentHost);
+      if (HOSTED_URL && this.currentHost === HOSTED_URL) {
+        // The hosted service wants the signed-in user's token before anything else. Never send it elsewhere.
+        this.ws.send(JSON.stringify({ type: 'auth', payload: { token: authToken() }, timestamp: Date.now() }));
+      }
       this._startHeartbeat();
       this._flushQueue();
       this.emit('connected', { host: this.currentHost });
@@ -100,7 +108,7 @@ class AetherWSClient {
       store().setDisconnected();
       this.emit('disconnected', { code: event.code, reason: event.reason });
 
-      if (!this.isManualClose) {
+      if (!this.isManualClose && event.code !== 4401) { // 4401: signed out, retrying won't help
         this._scheduleReconnect();
       }
     };
@@ -123,7 +131,7 @@ class AetherWSClient {
 
   // ─── Private: Handle Incoming Messages ────────────────────────────────────
   _handleMessage(msg) {
-    const store = useAetherStore.getState();
+    const store = useAetherStore.getState;
     store().updateHeartbeat();
 
     switch (msg.type) {
@@ -227,6 +235,17 @@ class AetherWSClient {
         store().setAvailableModels(msg.payload.models || []);
         break;
 
+      // ── Hosted account ──
+      case 'account_update':
+        store().setAccount(msg.payload);
+        break;
+
+      case 'auth_error':
+        this.isManualClose = true;
+        store().setAccount(null);
+        store().setCurrentActivity(msg.payload?.message);
+        break;
+
       // ── Self-Improvement ──
       case 'lesson_learned':
         store().addImprovementEntry(msg.payload);
@@ -252,7 +271,7 @@ class AetherWSClient {
 
   // ─── Private: Reconnect ────────────────────────────────────────────────────
   _scheduleReconnect() {
-    const store = useAetherStore.getState();
+    const store = useAetherStore.getState;
     const attempts = store().reconnectAttempts;
 
     if (attempts >= RECONNECT_MAX_ATTEMPTS) {
@@ -271,9 +290,8 @@ class AetherWSClient {
     store().setConnectionStatus(CONNECTION_STATUS.CONNECTING);
 
     this.reconnectTimer = setTimeout(() => {
-      if (this.currentHost && !this.isManualClose) {
-        const [host, port] = this.currentHost.split(':');
-        this.connect(host, port);
+      if (this.currentArgs && !this.isManualClose) {
+        this.connect(...this.currentArgs);
       }
     }, delay);
   }
@@ -298,9 +316,14 @@ class AetherWSClient {
     }
   }
 
+  // ─── Hosted account ────────────────────────────────────────────────────────
+  fetchAccount() {
+    this.send('account_fetch', {});
+  }
+
   // ─── Goal Commands ─────────────────────────────────────────────────────────
   submitGoal(goalText) {
-    const store = useAetherStore.getState();
+    const store = useAetherStore.getState;
     const goal = store().submitGoal(goalText);
     this.send('goal_submit', { goal_text: goalText, goal_id: goal.id });
     return goal;

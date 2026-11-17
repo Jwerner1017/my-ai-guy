@@ -3,10 +3,11 @@
  * Three methods: Auto-discovery, Manual IP entry, QR code scan
  */
 import React, { useState, useEffect, useRef } from 'react';
-import { Wifi, Search, QrCode, ChevronRight, Loader2, CheckCircle, AlertCircle, RefreshCw } from 'lucide-react';
+import { Wifi, Search, QrCode, ChevronRight, Loader2, CheckCircle, AlertCircle, RefreshCw, Cloud } from 'lucide-react';
 import { discoverAetherInstances, probeSpecificHost, parseAetherQRCode } from '@/lib/mdnsDiscovery';
 import wsClient from '@/lib/wsClient';
 import useAetherStore from '@/lib/aetherStore';
+import { HOSTED_URL } from '@/lib/hosted';
 
 const TABS = [
   { id: 'auto', label: 'Auto-Discover', icon: Search },
@@ -325,6 +326,20 @@ export default function ConnectionSetup({ onConnected }) {
 
   return (
     <div>
+      {HOSTED_URL && (
+        <>
+          <button
+            onClick={() => handleConnect(HOSTED_URL)}
+            className="w-full btn-cyan py-3 rounded-xl text-sm font-semibold inline-flex items-center justify-center gap-2"
+          >
+            <Cloud size={16} /> Use hosted Aether with your account
+          </button>
+          <p className="text-xs text-center mt-2 mb-5" style={{ color: 'var(--aether-text-dim)' }}>
+            Or connect to Aether running on your own computer:
+          </p>
+        </>
+      )}
+
       {/* Tab bar */}
       <div
         className="flex gap-1 p-1 rounded-xl mb-6"

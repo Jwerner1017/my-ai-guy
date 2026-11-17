@@ -3,15 +3,21 @@ import { Link } from 'react-router-dom';
 import { CheckCircle, Download, Server, Cloud, ArrowRight, Terminal } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 
+const REPO = 'https://github.com/Jwerner1017/my-ai-guy';
 const SELF_HOST_STEPS = [
-  { title: 'Clone the backend', command: 'git clone https://github.com/yourname/aether-backend.git' },
-  { title: 'Install dependencies', command: 'pip install -r requirements.txt' },
-  { title: 'Pull an Ollama model', command: 'ollama pull llama3' },
-  { title: 'Run the agent server', command: 'python main.py' },
+  { title: 'Get the code (needs Python 3.10+)', command: `git clone ${REPO}.git && cd my-ai-guy/backend` },
+  { title: 'Install it', command: 'pip install -e .' },
+  { title: 'Add your Anthropic API key', command: 'export ANTHROPIC_API_KEY=sk-ant-...' },
+  { title: 'Start it, then connect the app to 127.0.0.1:8765', command: 'aether-server' },
+];
+const HOSTED_STEPS = [
+  'Open the app and choose "Use hosted Aether with your account"',
+  'Your plan switches on as soon as Stripe confirms the payment, usually within seconds',
+  'See your plan and usage any time under Settings, Plan & Usage',
 ];
 
 function ThankYouContent({ tier, status }) {
-  const isHosted = tier === 'hosted_pro';
+  const isHosted = tier === 'pro' || tier === 'power';
 
   return (
     <div className="max-w-xl mx-auto px-6 py-12">
@@ -23,11 +29,11 @@ function ThankYouContent({ tier, status }) {
           <CheckCircle size={32} style={{ color: 'var(--aether-success)' }} />
         </div>
         <h1 className="text-2xl font-bold mb-2" style={{ color: 'var(--aether-text)' }}>
-          {status === 'pending' ? 'Payment received — verifying' : 'Welcome to Aether!'}
+          {!isHosted && status === 'pending' ? 'Payment received — verifying' : 'Welcome to Aether!'}
         </h1>
         <p className="text-sm" style={{ color: 'var(--aether-text-muted)' }}>
           {isHosted
-            ? 'Your hosted instance is being provisioned. We\'ll email you connection details shortly.'
+            ? `Your ${tier === 'power' ? 'Power' : 'Pro'} plan is ready to use.`
             : 'Your license is active. Follow the steps below to get your agent running.'}
         </p>
       </div>
@@ -36,15 +42,12 @@ function ThankYouContent({ tier, status }) {
         <div className="card-aether p-5 mb-6">
           <div className="flex items-center gap-3 mb-3">
             <Cloud size={18} style={{ color: 'var(--aether-cyan)' }} />
-            <h3 className="text-sm font-semibold" style={{ color: 'var(--aether-text)' }}>Hosted Pro Setup</h3>
+            <h3 className="text-sm font-semibold" style={{ color: 'var(--aether-text)' }}>Start using hosted Aether</h3>
           </div>
-          <p className="text-sm leading-relaxed mb-3" style={{ color: 'var(--aether-text-muted)' }}>
-            Your dedicated backend is spinning up in the cloud. You'll receive an email with:
-          </p>
           <ul className="space-y-2 text-sm" style={{ color: 'var(--aether-text)' }}>
-            <li className="flex items-start gap-2"><CheckCircle size={14} className="mt-0.5 flex-shrink-0" style={{ color: 'var(--aether-success)' }} />Your unique host & port</li>
-            <li className="flex items-start gap-2"><CheckCircle size={14} className="mt-0.5 flex-shrink-0" style={{ color: 'var(--aether-success)' }} />QR code for one-tap connect</li>
-            <li className="flex items-start gap-2"><CheckCircle size={14} className="mt-0.5 flex-shrink-0" style={{ color: 'var(--aether-success)' }} />Cloud memory sync credentials</li>
+            {HOSTED_STEPS.map(step => (
+              <li key={step} className="flex items-start gap-2"><CheckCircle size={14} className="mt-0.5 flex-shrink-0" style={{ color: 'var(--aether-success)' }} />{step}</li>
+            ))}
           </ul>
         </div>
       ) : (
@@ -77,7 +80,7 @@ function ThankYouContent({ tier, status }) {
         </Link>
         {!isHosted ? (
           <button
-            onClick={() => window.location.href = 'https://github.com/yourname/aether-backend/releases/latest'}
+            onClick={() => window.location.href = `${REPO}/archive/refs/heads/main.zip`}
             className="btn-surface px-6 py-2.5 rounded-xl text-sm font-semibold inline-flex items-center justify-center gap-2"
           >
             <Download size={16} /> Download Package

@@ -246,6 +246,16 @@ export default function GoalExecution() {
               </button>
             )}
 
+            {/* Aether's answer: the streamed text while it works, the final result when done */}
+            {(activeGoal?.result || executionLog.length > 0) && (
+              <div className="rounded-2xl p-4" style={{ background: 'var(--aether-surface)', border: '1px solid var(--aether-border)' }}>
+                <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-3">Reply</h3>
+                <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--aether-text)' }} aria-live="polite">
+                  {activeGoal?.result || executionLog.join('')}
+                </p>
+              </div>
+            )}
+
             {/* Animated thinking pipeline */}
             <ThinkingNodeGraph nodes={executionNodes} isExecuting={isExecuting} />
 

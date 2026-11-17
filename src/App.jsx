@@ -44,7 +44,8 @@ function AetherApp() {
     const timer = setTimeout(() => {
       const status = useAetherStore.getState().connectionStatus;
       if (status === CONNECTION_STATUS.IDLE || status === CONNECTION_STATUS.DISCONNECTED) {
-        if (useAetherStore.getState().onboardingComplete) {
+        // Demo data only for previews: never over the top of a backend the user chose.
+        if (useAetherStore.getState().onboardingComplete && !useAetherStore.getState().settings.savedHost) {
           loadMockData();
         }
       }
