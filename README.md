@@ -9,6 +9,10 @@ The app is built and hosted on **Base44**. It's a React 18 + Vite 6 SPA (React R
 
 > Base44 syncs this repo in both directions. Anything pushed here shows up in the Base44 Builder, and publishing from Base44 deploys myaiguy.me.
 
+## Backend (Aether)
+
+The assistant itself lives in [`backend/`](backend/README.md): a Python service on Claude Opus 5.5 that the app talks to over WebSocket on port 8765. It runs tools (files, shell, web), keeps memory across sessions, and plans multi-step work. Start it with `aether-server` and connect the app to `127.0.0.1:8765`.
+
 ## Layout
 
 | Path | What it is |

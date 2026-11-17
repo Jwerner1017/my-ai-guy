@@ -81,7 +81,7 @@ const useAetherStore = create(
         savedPort: '8765',
         autoConnect: true,
         // LLM
-        selectedModel: 'llama3.1:8b',
+        selectedModel: 'claude-opus-5-5',
         availableModels: [],
         // Memory
         importanceThreshold: 0.5,
@@ -304,8 +304,8 @@ const useAetherStore = create(
           savedHost: '192.168.1.42',
           savedPort: '8765',
           autoConnect: true,
-          selectedModel: 'llama3.1:8b',
-          availableModels: ['llama3.1:8b', 'llama3.1:70b', 'mistral:7b', 'phi4:latest', 'qwen2.5:14b'],
+          selectedModel: 'claude-opus-5-5',
+          availableModels: ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5'],
           importanceThreshold: 0.5,
           reflectionFrequency: 'daily',
           voiceSpeed: 1.0,
