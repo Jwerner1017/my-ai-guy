@@ -30,3 +30,9 @@ dist-ssr
 .env
 .vite
 base44/.app.jsonc
+
+# Python backend
+__pycache__/
+*.egg-info/
+.venv/
+.pytest_cache/

@@ -263,7 +263,7 @@ export default function Settings() {
           {/* ── LLM Model ── */}
           <Section title="Language Model" icon={Brain} iconColor="#9B5CFF">
             <div className="px-4 py-3">
-              <p className="text-xs text-gray-500 mb-2">Active Ollama Model</p>
+              <p className="text-xs text-gray-500 mb-2">Active Claude model</p>
               {settings.availableModels.length === 0 ? (
                 <p className="text-sm text-gray-500 italic">Connect to Aether to see available models</p>
               ) : (
