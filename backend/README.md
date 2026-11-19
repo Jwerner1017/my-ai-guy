@@ -34,14 +34,22 @@ Commands: `/tasks` shows open tasks, `/new` starts a fresh conversation (memory 
 
 ## Desktop software (CLI-Anything)
 
-Aether can drive desktop software such as GIMP, LibreOffice, Blender, Audacity or draw.io through [CLI-Anything](https://github.com/HKUDS/CLI-Anything) command-line tools. Install them with CLI-Hub on the computer that runs `aether` or `aether-server`, plus the desktop app each one wraps:
+Aether can drive desktop software through [CLI-Anything](https://github.com/HKUDS/CLI-Anything) command-line tools. Install them with CLI-Hub on the computer that runs `aether` or `aether-server`, in the same virtual environment. A starter pack for documents, images and diagrams:
 
 ```bash
 pip install cli-anything-hub
-cli-hub install gimp          # also needs GIMP itself, e.g. apt install gimp
+for c in libreoffice gimp mermaid drawio; do cli-hub install "$c"; done
+# Windows PowerShell: foreach ($c in "libreoffice","gimp","mermaid","drawio") { cli-hub install $c }
 ```
 
-At startup Aether reads `~/.cli-hub/installed.json`, tells Claude which of those commands are on your PATH, and Claude runs them through `run_shell`, so you still approve every command. Restart Aether after installing a new one. The hosted service never gets them.
+| CLI | Lets Aether | Also needs |
+|---|---|---|
+| `cli-anything-libreoffice` | write documents, spreadsheets and slides; export PDF, DOCX, XLSX, PPTX | [LibreOffice](https://www.libreoffice.org) |
+| `cli-anything-gimp` | create and edit images, apply filters, export PNG or JPEG | [GIMP](https://www.gimp.org) for native rendering; without it, it falls back to Pillow |
+| `cli-anything-mermaid` | draw flowcharts and other diagrams as SVG or PNG | nothing, but it renders through the public mermaid.ink service, so the diagram text leaves your computer. Set `MERMAID_RENDERER_URL` to a self-hosted mermaid.ink to keep it local |
+| `cli-anything-drawio` | build draw.io diagrams | the [draw.io desktop app](https://www.drawio.com) to export images; without it you only get the `.drawio` file |
+
+`cli-hub list` shows the rest (Blender, Audacity, Kdenlive, Obsidian, Zotero and more). On every message Aether reads `~/.cli-hub/installed.json` and tells Claude which of those commands are on your PATH, so a CLI you install, or ask Aether to install, works from your next message without a restart. Claude runs them through `run_shell`, so you still approve every command. The hosted service never gets them.
 
 ## Hosted service (`aether-hosted`)
 

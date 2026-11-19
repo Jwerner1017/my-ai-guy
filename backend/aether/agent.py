@@ -93,8 +93,8 @@ class Agent:
             *build_tools(workdir, self.store, approve, computer=computer),
         ]
         where = f"You run on the user's own computer ({platform.platform()}). Working directory: {workdir.resolve()}." if computer else ""
-        tool_rule = COMPUTER_RULE + cli_anything_rule() if computer else HOSTED_RULE
-        self.system = SYSTEM.format(tool_rule=tool_rule, where=where).strip()
+        # {clis} is filled in per run, like {date}, so a CLI installed mid-chat shows up on the next turn.
+        self.system = SYSTEM.format(tool_rule=COMPUTER_RULE + "{clis}" if computer else HOSTED_RULE, where=where).strip()
 
     def new_conversation(self) -> None:
         """Forget the chat history. Memory files and tasks are kept."""
@@ -115,6 +115,9 @@ class Agent:
         ("end_turn", "refusal", "max_tokens", ...), or "budget" when `keep_going` stopped it.
         """
         self.messages.append({"role": "user", "content": user_text})
+        system = self.system.replace("{date}", dt.date.today().isoformat())
+        if "{clis}" in system:
+            system = system.replace("{clis}", cli_anything_rule())
         basic = self.model in BASIC_WEB_MODELS
         # On a safety refusal the API re-runs the turn on a fallback model inside the same call.
         fallback = {} if basic else {"betas": ["server-side-fallback-2026-07-01"], "fallbacks": "default"}
@@ -123,8 +126,8 @@ class Agent:
             max_tokens=64000,
             stream=True,
             max_iterations=50,
-            # The date sits in the system prompt, so the cache turns over once a day.
-            system=[{"type": "text", "text": self.system.replace("{date}", dt.date.today().isoformat()), "cache_control": {"type": "ephemeral"}}],
+            # The date and the CLI list sit in the system prompt, so the cache turns over once a day or on a new CLI.
+            system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
             messages=self.messages,
             tools=[*self.tools, *(BASIC_WEB_TOOLS if basic else WEB_TOOLS)],
             output_config={"effort": EFFORT.get(self.model, "high")},

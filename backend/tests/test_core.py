@@ -203,9 +203,22 @@ def test_cli_anything_rule_names_installed_clis(tmp_path, monkeypatch):
     assert "cli-hub search" in rule
 
     monkeypatch.setattr("aether.agent.CLI_HUB_FILE", installed)
-    assert "`cli-anything-gimp`" in Agent(home=tmp_path / "a", workdir=tmp_path, approve=lambda *_: True, client=FakeClient()).system
-    hosted = Agent(home=tmp_path / "b", workdir=tmp_path, approve=lambda *_: True, client=FakeClient(), computer=False)
-    assert "CLI-Anything" not in hosted.system
+    client = FakeClient()
+    agent = Agent(home=tmp_path / "a", workdir=tmp_path, approve=lambda *_: True, client=client)
+    agent.run("hi", on_text=lambda _: None)
+    sent = client.last_params["system"][0]["text"]
+    assert "`cli-anything-gimp`" in sent and "cli-anything-new" not in sent and "{clis}" not in sent
+
+    # A CLI installed mid-chat (cli-hub install through run_shell) is in the next turn's prompt, no restart.
+    (bin_dir / "cli-anything-new").write_text("#!/bin/sh\n")
+    (bin_dir / "cli-anything-new").chmod(0o755)
+    installed.write_text(json.dumps({**json.loads(installed.read_text()), "new": {"entry_point": "cli-anything-new"}}))
+    agent.run("again", on_text=lambda _: None)
+    assert "`cli-anything-new`" in client.last_params["system"][0]["text"]
+
+    hosted_client = FakeClient()
+    Agent(home=tmp_path / "b", workdir=tmp_path, approve=lambda *_: True, client=hosted_client, computer=False).run("hi", on_text=lambda _: None)
+    assert "CLI-Anything" not in hosted_client.last_params["system"][0]["text"]
 
     # cli-hub alone still points Claude at it; with nothing installed there is no rule at all.
     assert "Installed" not in cli_anything_rule(tmp_path / "missing.json") and "cli-hub install" in cli_anything_rule(tmp_path / "missing.json")
