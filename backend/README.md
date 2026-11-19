@@ -32,6 +32,17 @@ aether
 
 Commands: `/tasks` shows open tasks, `/new` starts a fresh conversation (memory and tasks are kept), `/quit` exits. Every shell command and file write is shown to you first and needs a `y`.
 
+## Desktop software (CLI-Anything)
+
+Aether can drive desktop software such as GIMP, LibreOffice, Blender, Audacity or draw.io through [CLI-Anything](https://github.com/HKUDS/CLI-Anything) command-line tools. Install them with CLI-Hub on the computer that runs `aether` or `aether-server`, plus the desktop app each one wraps:
+
+```bash
+pip install cli-anything-hub
+cli-hub install gimp          # also needs GIMP itself, e.g. apt install gimp
+```
+
+At startup Aether reads `~/.cli-hub/installed.json`, tells Claude which of those commands are on your PATH, and Claude runs them through `run_shell`, so you still approve every command. Restart Aether after installing a new one. The hosted service never gets them.
+
 ## Hosted service (`aether-hosted`)
 
 The hosted, multi-user version behind myaiguy.me. People sign in with their myaiguy.me (Base44) account, and every account gets its own agent, memory, tasks and conversation under `$AETHER_HOME/users/<id>`. Hosted agents have no file or shell tools, because they run on your server, not the user's computer. Stripe sells the paid plans.
