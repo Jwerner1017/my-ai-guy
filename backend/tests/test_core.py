@@ -1,10 +1,11 @@
 """Offline tests: persistence, tool safety rails, and the agent loop against a fake client."""
 
+import json
 from types import SimpleNamespace
 
 import pytest
 
-from aether.agent import Agent
+from aether.agent import Agent, cli_anything_rule
 from aether.store import Store
 from aether.tools import build_tools
 
@@ -177,3 +178,38 @@ def test_agent_reports_tool_calls(tmp_path):
         ("tool_end", {"id": "toolu_1", "name": "read_file", "result": "hello", "is_error": False}),
     ]
     assert [m["role"] for m in agent.messages] == ["user", "assistant", "user", "assistant"]
+
+
+def test_cli_anything_rule_names_installed_clis(tmp_path, monkeypatch):
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    for name in ("cli-anything-gimp", "cli-hub", "cli-anything-zz"):
+        exe = bin_dir / name
+        exe.write_text("#!/bin/sh\n")
+        exe.chmod(0o755)
+    monkeypatch.setenv("PATH", str(bin_dir))
+    installed = tmp_path / "installed.json"
+    installed.write_text(json.dumps({
+        "gimp": {"entry_point": "cli-anything-gimp"},
+        "zz": {"entry_point": "cli-anything-zz"},
+        "gone": {"entry_point": "cli-anything-gone"},  # recorded, but no longer on PATH
+        "evil": {"entry_point": "cli-anything-gimp; rm -rf ~"},
+        "odd": "not an entry",
+    }))
+
+    rule = cli_anything_rule(installed)
+    assert "Installed: `cli-anything-gimp`, `cli-anything-zz`." in rule
+    assert "gone" not in rule and "rm -rf" not in rule
+    assert "cli-hub search" in rule
+
+    monkeypatch.setattr("aether.agent.CLI_HUB_FILE", installed)
+    assert "`cli-anything-gimp`" in Agent(home=tmp_path / "a", workdir=tmp_path, approve=lambda *_: True, client=FakeClient()).system
+    hosted = Agent(home=tmp_path / "b", workdir=tmp_path, approve=lambda *_: True, client=FakeClient(), computer=False)
+    assert "CLI-Anything" not in hosted.system
+
+    # cli-hub alone still points Claude at it; with nothing installed there is no rule at all.
+    assert "Installed" not in cli_anything_rule(tmp_path / "missing.json") and "cli-hub install" in cli_anything_rule(tmp_path / "missing.json")
+    monkeypatch.setenv("PATH", str(tmp_path / "empty"))
+    (tmp_path / "junk.json").write_text("{not json")
+    assert cli_anything_rule(tmp_path / "junk.json") == ""
+    assert cli_anything_rule(installed) == ""

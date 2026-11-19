@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import datetime as dt
+import json
 import platform
+import re
+import shutil
 from pathlib import Path
 from typing import Callable
 
@@ -29,6 +32,37 @@ Working rules:
 {where} Today is {{date}}."""  # {date} is filled in per run
 COMPUTER_RULE = "- Use the file tools to read and write files. Use `run_shell` for everything else. Every shell command and file write is shown to the user for approval, so make each one count."
 HOSTED_RULE = "- You run as a hosted service with no access to the user's files or computer. When a request needs them, say so and suggest the self-hosted version."
+
+# cli-hub (pip install cli-anything-hub) records every CLI it installs here, whatever the source.
+CLI_HUB_FILE = Path.home() / ".cli-hub" / "installed.json"
+COMMAND_NAME = re.compile(r"[A-Za-z0-9][\w.-]*")
+
+
+def cli_anything_rule(installed_file: Path | None = None) -> str:
+    """A prompt line naming the CLI-Anything CLIs on this computer, or "" when cli-hub isn't set up."""
+    try:
+        installed = json.loads((installed_file or CLI_HUB_FILE).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        installed = {}
+    commands = set()
+    for entry in installed.values() if isinstance(installed, dict) else []:
+        command = entry.get("entry_point") if isinstance(entry, dict) else None
+        # The file is local but goes into the prompt, so only plain command names that are really on PATH.
+        if isinstance(command, str) and COMMAND_NAME.fullmatch(command) and shutil.which(command):
+            commands.add(command)
+    hub = shutil.which("cli-hub") is not None
+    if not commands and not hub:
+        return ""
+    rule = "\n- CLI-Anything tools drive desktop software (image, office, audio, video, 3D, diagrams) through `run_shell`."
+    if commands:
+        rule += (
+            f" Installed: {', '.join(f'`{c}`' for c in sorted(commands))}."
+            " Run `<command> --help` first, put `--json` right after the command name for machine-readable output,"
+            " use absolute paths, and check that exported files exist."
+        )
+    if hub:
+        rule += " `cli-hub search <task>` finds more, `cli-hub info <name>` lists what one needs, and `cli-hub install <name>` adds it."
+    return rule
 
 # Haiku 5.5 takes the basic web tools and has no server-side refusal fallback (a fallback list 400s there).
 WEB_TOOLS = [{"type": "web_search_20260209", "name": "web_search"}, {"type": "web_fetch_20260209", "name": "web_fetch"}]
@@ -59,7 +93,8 @@ class Agent:
             *build_tools(workdir, self.store, approve, computer=computer),
         ]
         where = f"You run on the user's own computer ({platform.platform()}). Working directory: {workdir.resolve()}." if computer else ""
-        self.system = SYSTEM.format(tool_rule=COMPUTER_RULE if computer else HOSTED_RULE, where=where).strip()
+        tool_rule = COMPUTER_RULE + cli_anything_rule() if computer else HOSTED_RULE
+        self.system = SYSTEM.format(tool_rule=tool_rule, where=where).strip()
 
     def new_conversation(self) -> None:
         """Forget the chat history. Memory files and tasks are kept."""
